@@ -42,8 +42,15 @@ jobs:
       - name: Build WASM module
         run: npm run wasm
 
-      - name: Initialize Android project
-        run: npx tauri android init
+            - name: Initialize Android project
+        run: npx tauri android init --ci
+
+      - name: Verify Android project
+        run: |
+          echo "Contenu de src-tauri :"
+          ls -la src-tauri
+          echo "Vérification du projet Android :"
+          ls -la src-tauri/gen/android
 
       - name: Build debug APK
         run: npx tauri android build --apk --debug
