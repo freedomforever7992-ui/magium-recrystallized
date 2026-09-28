@@ -43,16 +43,27 @@ jobs:
         run: npm run wasm
 
       - name: Initialize Tauri Android
-        run: npm run tauri android init -- --ci
+        run: npx tauri android init --ci --verbose
 
       - name: Verify Android project
         run: |
-          echo "Checking Android project..."
-          ls -la src-tauri/gen/android
-          echo "Android project found successfully."
+          echo "Current directory:"
+          pwd
+          echo "Tauri files:"
+          ls -la src-tauri
+          echo "Android project:"
+          if [ -d "src-tauri/gen/android" ]; then
+            echo "Android project FOUND"
+            ls -la src-tauri/gen/android
+          else
+            echo "ERROR: Android project was NOT created"
+            echo "Contents of src-tauri/gen:"
+            ls -la src-tauri/gen 2>/dev/null || true
+            exit 1
+          fi
 
       - name: Build APK
-        run: npm run tauri android build -- --apk --debug
+        run: npx tauri android build --apk --debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
