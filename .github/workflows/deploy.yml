@@ -36,29 +36,62 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.3.13750724'
 
+      - name: Check Android environment
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "Android SDK:"
+          ls -la "$ANDROID_HOME"
+          echo "NDK:"
+          ls -la "$ANDROID_HOME/ndk"
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Check Tauri
+        run: |
+          npx tauri --version
+          npx tauri info
 
       - name: Build WASM
         run: npm run wasm
 
       - name: Initialize Tauri Android
-        run: npx tauri android init --ci --verbose
-
-      - name: Verify Android project
         run: |
-          echo "Current directory:"
-          pwd
-          echo "Tauri files:"
-          ls -la src-tauri
-          echo "Android project:"
-          if [ -d "src-tauri/gen/android" ]; then
-            echo "Android project FOUND"
-            ls -la src-tauri/gen/android
+          set -o pipefail
+          npx tauri android init --ci --verbose 2>&1 | tee android-init.log
+
+      - name: Inspect Android initialization
+        run: |
+          echo "===== ANDROID INIT LOG ====="
+          cat android-init.log
+
+          echo ""
+          echo "===== SRC-TAURI ====="
+          find src-tauri -maxdepth 4 -type d -print
+
+          echo ""
+          echo "===== GEN DIRECTORY ====="
+          if [ -d "src-tauri/gen" ]; then
+            ls -la src-tauri/gen
           else
-            echo "ERROR: Android project was NOT created"
-            echo "Contents of src-tauri/gen:"
-            ls -la src-tauri/gen 2>/dev/null || true
+            echo "src-tauri/gen DOES NOT EXIST"
+          fi
+
+          echo ""
+          echo "===== ANDROID DIRECTORY ====="
+          if [ -d "src-tauri/gen/android" ]; then
+            echo "ANDROID PROJECT FOUND"
+            find src-tauri/gen/android -maxdepth 2 -type f | head -100
+          else
+            echo "ANDROID PROJECT NOT FOUND"
+          fi
+
+      - name: Stop if Android project is missing
+        run: |
+          if [ ! -d "src-tauri/gen/android" ]; then
+            echo "ERROR: Tauri did not create src-tauri/gen/android"
             exit 1
           fi
 
