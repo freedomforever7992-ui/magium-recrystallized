@@ -1,4 +1,4 @@
-name: Build Magium Android APK
+name: Build Android APK
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -36,28 +36,27 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.3.13750724'
 
-      - name: Install npm dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Build WASM module
+      - name: Build WASM
         run: npm run wasm
 
-            - name: Initialize Android project
-        run: npx tauri android init --ci
+      - name: Initialize Tauri Android
+        run: npm run tauri android init -- --ci
 
       - name: Verify Android project
         run: |
-          echo "Contenu de src-tauri :"
-          ls -la src-tauri
-          echo "Vérification du projet Android :"
+          echo "Checking Android project..."
           ls -la src-tauri/gen/android
+          echo "Android project found successfully."
 
-      - name: Build debug APK
-        run: npx tauri android build --apk --debug
+      - name: Build APK
+        run: npm run tauri android build -- --apk --debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: magium-recrystallized-apk
+          name: magium-recrystallized-android
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
