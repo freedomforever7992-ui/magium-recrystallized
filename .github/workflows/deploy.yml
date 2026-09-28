@@ -8,60 +8,86 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      # 1. Récupération du projet
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
+      # 3. Java
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # 4. Rust
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,wasm32-unknown-unknown
 
+      # 5. wasm-pack
       - name: Install wasm-pack
         run: cargo install wasm-pack
 
+      # 6. Android SDK + NDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.3.13750724'
 
-      - name: Check Android environment
+      # 7. Configuration des variables Android
+      - name: Configure Android environment
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "Android SDK:"
-          ls -la "$ANDROID_HOME"
-          echo "NDK:"
-          ls -la "$ANDROID_HOME/ndk"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724" >> $GITHUB_ENV
 
+          echo "===== ANDROID ENVIRONMENT ====="
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724"
+
+          echo ""
+          echo "===== NDK CHECK ====="
+          ls -la "$ANDROID_HOME/ndk/27.3.13750724"
+
+      # 8. Installation des dépendances
       - name: Install dependencies
         run: npm ci
 
+      # 9. Vérification de Tauri
       - name: Check Tauri
         run: |
+          echo "===== TAURI VERSION ====="
           npx tauri --version
+
+          echo ""
+          echo "===== TAURI INFO ====="
           npx tauri info
 
+      # 10. Compilation WASM
       - name: Build WASM
         run: npm run wasm
 
+      # 11. Initialisation du projet Android Tauri
       - name: Initialize Tauri Android
         run: |
           set -o pipefail
+
+          echo "===== INITIALIZING TAURI ANDROID ====="
+
           npx tauri android init --ci --verbose 2>&1 | tee android-init.log
 
+      # 12. Vérification de la génération Android
       - name: Inspect Android initialization
         run: |
           echo "===== ANDROID INIT LOG ====="
@@ -73,7 +99,9 @@ jobs:
 
           echo ""
           echo "===== GEN DIRECTORY ====="
+
           if [ -d "src-tauri/gen" ]; then
+            echo "src-tauri/gen FOUND"
             ls -la src-tauri/gen
           else
             echo "src-tauri/gen DOES NOT EXIST"
@@ -81,6 +109,7 @@ jobs:
 
           echo ""
           echo "===== ANDROID DIRECTORY ====="
+
           if [ -d "src-tauri/gen/android" ]; then
             echo "ANDROID PROJECT FOUND"
             find src-tauri/gen/android -maxdepth 2 -type f | head -100
@@ -88,6 +117,7 @@ jobs:
             echo "ANDROID PROJECT NOT FOUND"
           fi
 
+      # 13. Arrêt si le projet Android n'a pas été créé
       - name: Stop if Android project is missing
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
@@ -95,9 +125,20 @@ jobs:
             exit 1
           fi
 
-      - name: Build APK
-        run: npx tauri android build --apk --debug
+          echo "Android project successfully created!"
 
+      # 14. Compilation de l'APK
+      - name: Build APK
+        run: |
+          npx tauri android build --apk --debug
+
+      # 15. Recherche de l'APK
+      - name: Find APK
+        run: |
+          echo "===== GENERATED APK FILES ====="
+          find src-tauri/gen/android -type f -name "*.apk" -print
+
+      # 16. Upload de l'APK dans GitHub Actions
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
