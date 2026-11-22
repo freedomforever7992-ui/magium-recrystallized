@@ -184,29 +184,8 @@ jobs:
               '    if (!loadCheckpoint()) alert("Aucune sauvegarde manuelle disponible.");\n'
               '    else closeMenu();\n  }')
 
-          Path('src/lib/components/SavesPanel.svelte').write_text('''<script lang="ts">
-            import { currentIndex, saveCheckpoint, loadCheckpoint, restartStory } from '$lib/stores/passagestore';
-            import { closeMenu } from '$lib/stores/state';
-            let feedback = '';
-            function save() { saveCheckpoint(); feedback = 'Point de sauvegarde enregistre localement.'; }
-            function load() {
-              if (loadCheckpoint()) { feedback = 'Sauvegarde chargee.'; closeMenu(); }
-              else feedback = 'Aucune sauvegarde manuelle disponible.';
-            }
-            function restart() {
-              if (confirm('Recommencer depuis le debut ?')) { restartStory(); closeMenu(); }
-            }
-          </script>
-          <section class="p-8 mt-16 space-y-5 text-neutral-900 dark:text-neutral-100">
-            <h2 class="text-3xl font-bold">Sauvegardes</h2>
-            <p>Progression automatiquement enregistree sur ce telephone.</p>
-            <p>Passage actuel : {$currentIndex}</p>
-            <button class="block w-full rounded bg-gray-700 text-white p-4" on:click={save}>Creer un point de sauvegarde</button>
-            <button class="block w-full rounded bg-gray-700 text-white p-4" on:click={load}>Charger le point de sauvegarde</button>
-            <button class="block w-full rounded bg-red-900 text-white p-4" on:click={restart}>Recommencer l'histoire</button>
-            <p aria-live="polite">{feedback}</p>
-          </section>
-          ''', encoding='utf-8')
+          # Le panneau bilingue des sauvegardes est maintenant dans les sources.
+
 
           replace_once('src/app.html',
               'content="width=device-width, initial-scale=1"',
