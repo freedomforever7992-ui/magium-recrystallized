@@ -138,7 +138,7 @@ def preserve_format_and_translate(original: str, translate_text) -> str:
         line_body = line.rstrip("\r\n")
         ending = line[len(line_body):]
         stripped = line_body.strip()
-        if not stripped or CONTROL.match(stripped):
+        if not stripped or CONTROL.match(stripped) or not re.search(r'[A-Za-zÀ-ÿ]', stripped):
             translated_lines.append(line)
             continue
         prefix = line_body[:len(line_body) - len(line_body.lstrip())]
