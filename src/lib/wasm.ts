@@ -9,6 +9,9 @@
 import init, { CyoaGame } from '../pkg/wasm_module.js';
 import type { CyoaGame as ClientType } from '../pkg/wasm_module.js';
 import { base } from '$app/paths';
+import { get } from 'svelte/store';
+import { language } from '$lib/i18n';
+import { frenchOpening, frenchChoices } from '$lib/story-fr-fallback';
 
 /**
  * Relative URL to the compiled WebAssembly binary for the CYOA engine.
@@ -49,6 +52,40 @@ type NodeRaw = {
   /** Array of outgoing edges (choices) from this node */
   edges: EdgeRaw[];
 };
+
+interface FrenchStoryBundle {
+  root: string;
+  nodes: Record<string, string>;
+  labels: Record<string, string>;
+}
+let frenchBundleRequest: Promise<FrenchStoryBundle | null> | undefined;
+async function loadFrenchBundle(): Promise<FrenchStoryBundle | null> {
+  if (!frenchBundleRequest) {
+    frenchBundleRequest = fetch(`${base}/magium-fr.json`).then(async response => {
+      if (!response.ok) return null;
+      const data: unknown = await response.json();
+      if (!data || typeof data !== 'object' || !('nodes' in data) || !('labels' in data)) return null;
+      return data as FrenchStoryBundle;
+    }).catch(() => null);
+  }
+  return frenchBundleRequest;
+}
+
+async function localizeNode(raw: NodeRaw, nodeIndex?: number, isOpening = false): Promise<NodeRaw> {
+  if (get(language) !== 'fr') return raw;
+  const translations = await loadFrenchBundle();
+  const content = isOpening || nodeIndex === 34
+    ? frenchOpening
+    : (nodeIndex === undefined ? undefined : translations?.nodes[String(nodeIndex)]) ?? raw.content;
+  return {
+    content,
+    edges: raw.edges.map(edge => ({
+      ...edge,
+      label: frenchChoices[edge.label] ?? translations?.labels[edge.label] ?? edge.label
+    }))
+  };
+}
+
 
 /**
  * Map from story file path to its singleton CyoaGame client instance.
@@ -110,7 +147,7 @@ export async function fetchRootNodeFull(): Promise<{
 }> {
   const client = await getClient();
   // Load the root node (index 0) via the WASM API
-  const jsNode = (await client.load_root_node_full()) as NodeRaw;
+  const jsNode = await localizeNode((await client.load_root_node_full()) as NodeRaw, undefined, true);
 
   // Transform raw edges into public-facing Edge objects
   const edges: Edge[] = jsNode.edges.map(({ label, dest_idx }) => ({
@@ -151,7 +188,7 @@ export async function fetchNodeFull(
   edges: Edge[];
 }> {
   const client = await getClient();
-  const jsNode = (await client.load_node_full(nodeIdx)) as NodeRaw;
+  const jsNode = await localizeNode((await client.load_node_full(nodeIdx)) as NodeRaw, nodeIdx);
 
   // Map fields from WASM format to our public API
   const edges: Edge[] = jsNode.edges.map(({ label, dest_idx }) => ({
