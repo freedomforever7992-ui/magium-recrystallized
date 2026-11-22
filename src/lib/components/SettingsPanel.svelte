@@ -38,6 +38,13 @@
     localStorage.setItem("theme", isDark ? "dark" : "light");
   }
 
+  function changeLanguage() {
+    language.set($language === "fr" ? "en" : "fr");
+    // The story cache contains localized passages. Reinitialize the reader
+    // so both the currently displayed passage and its choices are translated.
+    if (typeof window !== "undefined") window.location.reload();
+  }
+
   function onToggleDark() {
     isDark = !isDark;
     applyTheme();
@@ -86,7 +93,7 @@
     >
       {t("settingsTitle", $language)}
     </h2>
-    <button on:click={() => language.set($language === "fr" ? "en" : "fr")}
+    <button on:click={changeLanguage}
       class="w-full px-6 py-4 text-lg font-semibold rounded-lg bg-amber-700 text-white">
       {t("language", $language)} : {$language === "fr" ? "Français" : "English"} · ⇄
     </button>
