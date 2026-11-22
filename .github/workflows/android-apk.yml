@@ -197,6 +197,25 @@ jobs:
           print('Correctifs Android appliques, fichiers de jeu et moteur WASM conserves.')
           PY
 
+      - name: Generer la traduction francaise du recit et des choix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv-traduction
+          .venv-traduction/bin/python -m pip install --disable-pip-version-check argostranslate zstandard
+          OMP_NUM_THREADS=2 .venv-traduction/bin/python scripts/generate_french_story.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('static/magium-fr.json').read_text(encoding='utf-8'))
+          assert data['metadata']['passageCount'] == 12, 'Nombre de scenes modifie'
+          assert len(data['nodes']) == 12, 'Une scene traduite est manquante'
+          assert data['root'].strip(), 'Introduction traduite vide'
+          assert data['labels'], 'Choix traduits manquants'
+          print('Traduction validee:', len(data['nodes']), 'scenes et',
+                len(data['labels']), 'choix distincts.')
+          PY
+
       - name: Initialiser Tauri pour Android
         run: npm run tauri -- android init --ci
 
