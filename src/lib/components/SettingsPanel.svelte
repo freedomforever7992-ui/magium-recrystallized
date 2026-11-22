@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fly } from "svelte/transition";
+  import { language, t, type TranslationKey } from "$lib/i18n";
   import {
     textWidthStore,
     colorThemeStore,
@@ -17,9 +18,9 @@
   $: themeIndex = themes.findIndex((t) => t === $colorThemeStore);
 
   const widths = [
-    { label: "Full Width", value: TextWidth.Full },
-    { label: "3/4 Width", value: TextWidth.Medium },
-    { label: "1/2 Width", value: TextWidth.Low },
+    { label: "fullWidth" as TranslationKey, value: TextWidth.Full },
+    { label: "mediumWidth" as TranslationKey, value: TextWidth.Medium },
+    { label: "halfWidth" as TranslationKey, value: TextWidth.Low },
   ];
   $: widthIndex = widths.findIndex((w) => w.value === $textWidthStore);
 
@@ -83,8 +84,13 @@
     <h2
       class="text-4xl font-extrabold text-neutral-900 dark:text-neutral-50 mb-8"
     >
-      Settings
+      {t("settingsTitle", $language)}
     </h2>
+    <button on:click={() => language.set($language === "fr" ? "en" : "fr")}
+      class="w-full px-6 py-4 text-lg font-semibold rounded-lg bg-amber-700 text-white">
+      {t("language", $language)} : {$language === "fr" ? "Français" : "English"} · ⇄
+    </button>
+    <p class="text-sm opacity-75 mt-3">{t("narrativeLanguage", $language)}</p>
 
     <button
       on:click={onToggleDark}
@@ -93,9 +99,9 @@
              rounded-lg shadow hover:shadow-md transition-colors duration-200"
     >
       {#if isDark}
-        Disable Dark Mode
+        {t("darkDisable", $language)}
       {:else}
-        Enable Dark Mode
+        {t("darkEnable", $language)}
       {/if}
     </button>
 
@@ -148,7 +154,7 @@
               in:fly={{ x: widthDirection * 50, duration: 200 }}
               out:fly={{ x: -widthDirection * 50, duration: 200 }}
             >
-              {widths[widthIndex].label}
+              {t(widths[widthIndex].label, $language)}
             </span>
           {/key}
         </div>
