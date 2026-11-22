@@ -7,7 +7,6 @@
   import Header from "$lib/components/Header.svelte";
   import ChapterContent from "$lib/components/ChapterContent.svelte";
   import ChoiceList from "$lib/components/ChoiceList.svelte";
-  import Menu from "$lib/components/Menu.svelte";
 
   $: maxWidth =
     $textWidthStore === TextWidth.Full
@@ -25,7 +24,6 @@
 >
   <header class="fixed w-full top-0 z-50 bg-gray-50 dark:bg-gray-900">
     <Header {book} {chapter} />
-    <Menu />
   </header>
 
   <main class="flex-1 overflow-auto pt-18">
