@@ -1,0 +1,255 @@
+name: Magium Recrystallized - APK Android ARM64
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    env:
+      CI: 'true'
+      NDK_VERSION: '27.2.12479018'
+    steps:
+      - name: Recuperer le projet Magium
+        uses: actions/checkout@v4
+
+      - name: Configurer Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurer Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Configurer Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Installer NDK et Build Tools
+        shell: bash
+        run: |
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "ndk;${NDK_VERSION}"
+          echo "NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Configurer Rust Android
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Installer les dependances Javascript
+        run: npm ci
+
+      - name: Adaptations Android, moteur WASM, sauvegarde hors ligne
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              content = p.read_text(encoding='utf-8')
+              if old not in content:
+                  raise SystemExit(f"Le projet amont a change: texte introuvable dans {path}: {old[:95]!r}")
+              p.write_text(content.replace(old, new, 1), encoding='utf-8')
+
+          # Android interdit les tirets dans l'identifiant de package.
+          Path('src-tauri/tauri.android.conf.json').write_text(
+              json.dumps({'identifier': 'io.github.magiumrecrystallized.unofficial'}, indent=2),
+              encoding='utf-8'
+          )
+
+          # Le parametre wasm-pack est module_or_path (et non url).
+          replace_once('src/lib/wasm.ts',
+              'export const ready = init({ url: wasmUrl.href });',
+              'export const ready = init({ module_or_path: wasmUrl.href });')
+          # Le constructeur WASM est asynchrone dans la version distribuee.
+          replace_once('src/lib/wasm.ts',
+              'clients[STORY_PATH] = new CyoaGame(STORY_PATH);',
+              'clients[STORY_PATH] = await new CyoaGame(STORY_PATH);')
+
+          # Les assets internes Android ne garantissent pas HTTP Range (206).
+          # Magium ne fait que ~44 Ko: lire l'histoire une fois, et servir
+          # des tranches 206 en memoire au moteur Rust/WASM. Aucune connexion.
+          shim = r'''// Android/offline: provide exact byte ranges for bundled story data.
+          // The game's WASM decoder requires Content-Range and status 206.
+          function installBundledStoryRanges(): void {
+            if (typeof window === 'undefined') return;
+            const originalFetch = window.fetch.bind(window);
+            let storyData: Promise<ArrayBuffer> | undefined;
+            window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+              const requested = typeof input === 'string' ? input
+                : input instanceof URL ? input.href : input.url;
+              const resolved = new URL(requested, window.location.href);
+              if (resolved.origin !== window.location.origin ||
+                  resolved.pathname !== STORY_PATH) return originalFetch(input, init);
+              if (!storyData) {
+                storyData = originalFetch(resolved.href).then(r => {
+                  if (!r.ok) throw new Error(`Cannot load bundled story: HTTP ${r.status}`);
+                  return r.arrayBuffer();
+                });
+              }
+              const bytes = await storyData;
+              const total = bytes.byteLength;
+              const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+              const requestedRange = headers.get('Range');
+              const match = requestedRange?.match(/^bytes=(\d+)-(\d*)$/i);
+              const baseHeaders: Record<string, string> = {
+                'Accept-Ranges': 'bytes',
+                'Content-Type': 'application/octet-stream'
+              };
+              if (requestedRange && !match) {
+                return new Response(null, {status: 416, headers: {...baseHeaders, 'Content-Range': `bytes */${total}`}});
+              }
+              if (match) {
+                const start = Number(match[1]);
+                const end = match[2] ? Number(match[2]) : total - 1;
+                if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) ||
+                    start > end || end >= total) {
+                  return new Response(null, {status: 416, headers: {...baseHeaders, 'Content-Range': `bytes */${total}`}});
+                }
+                return new Response(bytes.slice(start, end + 1), {
+                  status: 206,
+                  headers: {...baseHeaders, 'Content-Range': `bytes ${start}-${end}/${total}`,
+                            'Content-Length': String(end - start + 1)}
+                });
+              }
+              return new Response(bytes.slice(0), {status: 200,
+                headers: {...baseHeaders, 'Content-Length': String(total)}});
+            };
+          }
+          installBundledStoryRanges();
+
+          '''
+          replace_once('src/lib/wasm.ts',
+              '/**\n * Promise that resolves when the WASM module has been initialized.',
+              shim + '/**\n * Promise that resolves when the WASM module has been initialized.')
+
+          # Restauration automatique a la reouverture, sans serveur.
+          replace_once('src/lib/stores/passagestore.ts',
+              'export const currentIndex = writable<number>(0);',
+              """export const currentIndex = writable<number>(0);
+          const AUTOSAVE_KEY = 'magium_recrystallized_autosave_v1';
+          const CHECKPOINT_KEY = 'magium_recrystallized_checkpoint_v1';
+
+          export function saveCheckpoint(): void {
+            localStorage.setItem(CHECKPOINT_KEY, String(get(currentIndex)));
+          }
+
+          export function loadCheckpoint(): boolean {
+            const saved = localStorage.getItem(CHECKPOINT_KEY);
+            if (saved === null) return false;
+            const index = Number(saved);
+            if (!Number.isSafeInteger(index) || index < 0) return false;
+            goTo(index);
+            return true;
+          }
+
+          export function restartStory(): void {
+            localStorage.removeItem(CHECKPOINT_KEY);
+            goTo(0);
+          }
+          """)
+          replace_once('src/lib/stores/passagestore.ts',
+              '  currentIndex.set(0);\n}',
+              """  const value = Number(localStorage.getItem(AUTOSAVE_KEY) ?? '0');
+            const restored = Number.isSafeInteger(value) && value > 0 ? value : 0;
+            if (restored > 0) await loadNode(restored);
+            currentIndex.set(restored);
+          }""")
+          replace_once('src/lib/stores/passagestore.ts',
+              '  currentIndex.set(idx);\n  // Begin loading (and caching) the new node asynchronously',
+              """  currentIndex.set(idx);
+            localStorage.setItem(AUTOSAVE_KEY, String(idx));
+            // Begin loading (and caching) the new node asynchronously""")
+
+          # Active les 2 boutons de sauvegarde existants dans le menu.
+          replace_once('src/lib/components/Menu.svelte',
+              '  import { useMaxWidth } from "$lib/stores/displaysettings";',
+              '  import { useMaxWidth } from "$lib/stores/displaysettings";\n'
+              '  import { saveCheckpoint, loadCheckpoint } from "$lib/stores/passagestore";')
+          replace_once('src/lib/components/Menu.svelte',
+              '  function quicksave() {\n    console.log("Quicksave");\n  }\n'
+              '  function loadLastCheckpoint() {\n    console.log("Load last checkpoint");\n  }',
+              '  function quicksave() {\n    saveCheckpoint();\n    closeMenu();\n  }\n'
+              '  function loadLastCheckpoint() {\n'
+              '    if (!loadCheckpoint()) alert("Aucune sauvegarde manuelle disponible.");\n'
+              '    else closeMenu();\n  }')
+
+          Path('src/lib/components/SavesPanel.svelte').write_text('''<script lang="ts">
+            import { currentIndex, saveCheckpoint, loadCheckpoint, restartStory } from '$lib/stores/passagestore';
+            import { closeMenu } from '$lib/stores/state';
+            let feedback = '';
+            function save() { saveCheckpoint(); feedback = 'Point de sauvegarde enregistre localement.'; }
+            function load() {
+              if (loadCheckpoint()) { feedback = 'Sauvegarde chargee.'; closeMenu(); }
+              else feedback = 'Aucune sauvegarde manuelle disponible.';
+            }
+            function restart() {
+              if (confirm('Recommencer depuis le debut ?')) { restartStory(); closeMenu(); }
+            }
+          </script>
+          <section class="p-8 mt-16 space-y-5 text-neutral-900 dark:text-neutral-100">
+            <h2 class="text-3xl font-bold">Sauvegardes</h2>
+            <p>Progression automatiquement enregistree sur ce telephone.</p>
+            <p>Passage actuel : {$currentIndex}</p>
+            <button class="block w-full rounded bg-gray-700 text-white p-4" on:click={save}>Creer un point de sauvegarde</button>
+            <button class="block w-full rounded bg-gray-700 text-white p-4" on:click={load}>Charger le point de sauvegarde</button>
+            <button class="block w-full rounded bg-red-900 text-white p-4" on:click={restart}>Recommencer l'histoire</button>
+            <p aria-live="polite">{feedback}</p>
+          </section>
+          ''', encoding='utf-8')
+
+          replace_once('src/app.html',
+              'content="width=device-width, initial-scale=1"',
+              'content="width=device-width, initial-scale=1, viewport-fit=cover"')
+          css_path = Path('src/app.css')
+          css_path.write_text(css_path.read_text(encoding='utf-8') +
+              '\n/* Android: keep controls clear of the system navigation bar. */\n'
+              'body { padding-bottom: env(safe-area-inset-bottom, 0px); }\n', encoding='utf-8')
+          print('Correctifs Android appliques, fichiers de jeu et moteur WASM conserves.')
+          PY
+
+      - name: Initialiser Tauri pour Android
+        run: npm run tauri -- android init --ci
+
+      - name: Construire APK ARM64 hors ligne
+        run: npm run tauri -- android build --apk --target aarch64 --ci
+
+      - name: Signer et verifier APK installable
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_apk="$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk' | head -n 1)"
+          if [ -z "$source_apk" ]; then
+            echo "Aucun APK produit" >&2
+            exit 1
+          fi
+          keytool -genkeypair -noprompt -keystore "$RUNNER_TEMP/magium.jks" \
+            -alias magium -keyalg RSA -keysize 3072 -validity 3650 \
+            -dname 'CN=Magium local port, OU=Personal, O=Personal, C=FR' \
+            -storepass 'magiumlocal' -keypass 'magiumlocal'
+          mkdir -p apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$source_apk" "$RUNNER_TEMP/magium-aligned.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+            --ks "$RUNNER_TEMP/magium.jks" --ks-key-alias magium \
+            --ks-pass pass:magiumlocal --key-pass pass:magiumlocal \
+            --out apk/Magium-Recrystallized-Android-ARM64.apk "$RUNNER_TEMP/magium-aligned.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose apk/Magium-Recrystallized-Android-ARM64.apk
+          ls -lh apk/
+
+      - name: Publier APK en artefact telechargeable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Magium-Recrystallized-Android-ARM64
+          path: apk/Magium-Recrystallized-Android-ARM64.apk
+          if-no-files-found: error
+          retention-days: 30
