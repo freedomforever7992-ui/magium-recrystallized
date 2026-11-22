@@ -1,17 +1,28 @@
 <script lang="ts">
-  import { currentIndex, saveCheckpoint, loadCheckpoint, restartStory } from '$lib/stores/passagestore';
+  import { currentIndex, goTo } from '$lib/stores/passagestore';
+  import { get } from 'svelte/store';
+  const KEY = 'magium_recrystallized_checkpoint_v1';
   import { closeMenu } from '$lib/stores/state';
   import { language, t } from '$lib/i18n';
 
   let feedback = '';
-  function save() { saveCheckpoint(); feedback = t('saved', $language); }
+  function save() {
+    localStorage.setItem(KEY, String(get(currentIndex)));
+    feedback = t('saved', $language);
+  }
   function load() {
-    if (loadCheckpoint()) { feedback = t('loaded', $language); closeMenu(); }
-    else feedback = t('noSave', $language);
+    const value = localStorage.getItem(KEY);
+    const idx = value === null ? NaN : Number(value);
+    if (Number.isSafeInteger(idx) && idx >= 0) {
+      goTo(idx);
+      feedback = t('loaded', $language);
+      closeMenu();
+    } else feedback = t('noSave', $language);
   }
   function restart() {
     if (confirm(t('restartConfirm', $language))) {
-      restartStory();
+      localStorage.removeItem(KEY);
+      goTo(0);
       closeMenu();
     }
   }
