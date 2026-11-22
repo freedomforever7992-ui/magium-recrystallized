@@ -2,6 +2,7 @@
   import Menu from "./Menu.svelte";
   import { openMenu, openStats } from "$lib/stores/state";
   import StatsPanel from './StatsPanel.svelte';
+  import { language, t } from '$lib/i18n';
 
   export let book: number;
   export let chapter: number;
@@ -19,11 +20,11 @@
 
   <div class="flex-1 text-center leading-none">
     <h2 class="text-xs -mt-0.5 font-semibold truncate leading-none">
-      BOOK&nbsp;{book}
+      {t('book', $language)}&nbsp;{book}
     </h2>
 
     <h1 class="-mt-0.5 text-xl font-bold truncate leading-[1.05]">
-      CHAPTER&nbsp;{chapter}
+      {t('chapter', $language)}&nbsp;{chapter}
     </h1>
   </div>
 
@@ -31,7 +32,7 @@
     class="font-semibold hover:text-neutral-300 text-xl py-2"
     on:click={() => openStats()} 
   >
-    STATS
+    {t('stats', $language)}
   </button>
 </header>
 
