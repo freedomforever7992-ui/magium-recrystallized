@@ -1,183 +1,98 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { fly, fade } from 'svelte/transition';
-  import type { StatKey, Stats } from '$lib/stores/stats';
-  import { statsStore } from '$lib/stores/stats';
+  import { fade, fly } from 'svelte/transition';
+  import { baseKeys, statsStore, type StatKey } from '$lib/stores/stats';
   import { uiState, PrimaryState, openGame } from '$lib/stores/state';
+  import { language, t, type TranslationKey } from '$lib/i18n';
 
-  // Base stat keys
-  const statKeys: StatKey[] = [
-    'Strength','Speed','Toughness','Reflexes',
-    'Hearing','Observation','Ancient Languages',
-    'Combat Technique','Premonition','Bluff',
-    'Magical sense','Aura hardening'
-  ];
-
-  const firstBatch = statKeys.slice(0, 6);
-  const restBatch = statKeys.slice(6);
-
-  // Subscribe to combined stats store
-  let current: Stats = {} as Stats;
-  const unsubscribe = statsStore.subscribe(vals => current = vals);
-  onDestroy(unsubscribe);
-
-  // Increment a base stat when clicked
-  function handleClick(key: StatKey) {
-    statsStore.addStat(key, 1);
+  const names: Record<StatKey, TranslationKey> = {
+    'Strength': 'strength', 'Speed': 'speed', 'Toughness': 'toughness',
+    'Reflexes': 'reflexes', 'Hearing': 'hearing',
+    'Observation': 'observation', 'Ancient Languages': 'languages',
+    'Combat Technique': 'combat', 'Premonition': 'premonition',
+    'Bluff': 'bluff', 'Magical sense': 'magicalSense',
+    'Aura hardening': 'aura'
+  };
+  function number(value: number): string {
+    return value.toLocaleString($language === 'fr' ? 'fr-FR' : 'en-US');
   }
-
-  /**
-   * Action to toggle scroll locking on <body>
-   */
-  function scrollLock(node: HTMLElement, locked: boolean) {
-    const set = (val: boolean) => (document.body.style.overflow = val ? 'hidden' : '');
-    set(locked);
-    return {
-      update(v: boolean) { set(v); },
-      destroy() { document.body.style.overflow = ''; }
-    };
+  function reset() {
+    if (confirm(t('resetConfirm', $language))) statsStore.resetStats();
   }
-
-  /**
-   * Action to trap focus within the stats panel
-   */
-  function trapFocus(node: HTMLElement) {
-    const prev = document.activeElement as HTMLElement | null;
-    node.focus({ preventScroll: true });
-
-    const sel = 'a[href],button:not([disabled]),textarea,input,select,[tabindex]:not([tabindex="-1"])';
-    let focusables: HTMLElement[] = [];
-    const refresh = () => focusables = Array.from(node.querySelectorAll<HTMLElement>(sel));
-    refresh();
-
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== 'Tab') return;
-      refresh();
-      const idx = focusables.indexOf(document.activeElement as HTMLElement);
-      if (e.shiftKey) {
-        if (idx === 0 || document.activeElement === node) {
-          e.preventDefault();
-          focusables[focusables.length - 1]?.focus();
-        }
-      } else {
-        if (idx === focusables.length - 1 || document.activeElement === node) {
-          e.preventDefault();
-          focusables[0]?.focus();
-        }
-      }
-    }
-    node.addEventListener('keydown', onKey);
-
-    return {
-      destroy() {
-        node.removeEventListener('keydown', onKey);
-        prev?.focus();
-      }
-    };
+  function keydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') openGame();
   }
-
-  // Global Escape-to-close handler
-  function onKeyup(e: KeyboardEvent) {
-    if (e.key === 'Escape' && $uiState.primary === PrimaryState.Stats) {
-      openGame();
-    }
-  }
-
-  // Lock page scroll reactively when stats panel is open
-  $: document.body.style.overflow = $uiState.primary === PrimaryState.Stats ? 'hidden' : '';
-
-  onMount(() => {
-    window.addEventListener('keyup', onKeyup);
-  });
-
-  onDestroy(() => {
-    window.removeEventListener('keyup', onKeyup);
-  });
 </script>
 
-{#if $uiState.primary === PrimaryState.Stats}
-  <!-- Backdrop -->
-  <div
-    class="fixed inset-0 bg-[rgba(10,10,10,0.6)] backdrop-blur-sm z-40"
-    on:click={openGame}
-    aria-hidden="true"
-    transition:fade
-  />
+<svelte:window on:keydown={keydown} />
 
-  <!-- Stats Panel (dialog) -->
-  <div
-    use:scrollLock={$uiState.primary === PrimaryState.Stats}
-    use:trapFocus
-    tabindex="-1"
-    role="dialog"
-    aria-modal="true"
-    class="fixed inset-0 z-50 bg-white dark:bg-gray-900 overflow-auto"
-    on:click|stopPropagation
-    in:fly={{ x: innerWidth, duration: 300 }}
-    out:fly={{ x: innerWidth, duration: 300 }}
-  >
-    <div class="h-full flex flex-col sm:p-6">
-      <!-- Header with close action -->
-      <header class="relative mb-4 flex-shrink-0 text-center">
-        <button
-          class="absolute top-6 right-6 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 focus:outline-none focus:ring"
-          aria-label="Close stats panel"
-          on:click={() => openGame()}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-neutral-600 dark:text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-        <h2 class="text-4xl font-extrabold text-neutral-900 dark:text-neutral-50 mt-[6rem]">Stats</h2>
+{#if $uiState.primary === PrimaryState.Stats}
+  <div class="fixed inset-0 bg-black/70 z-40" on:click={openGame}
+       aria-hidden="true" transition:fade />
+
+  <section role="dialog" aria-modal="true" aria-label={t('headingStats', $language)}
+           class="fixed inset-0 z-50 overflow-y-auto bg-gray-50 dark:bg-gray-900 text-neutral-900 dark:text-neutral-100"
+           in:fly={{ x: innerWidth, duration: 230 }}
+           out:fly={{ x: innerWidth, duration: 230 }}>
+    <div class="max-w-3xl mx-auto px-4 sm:px-8 pb-12 pt-6">
+      <header class="flex items-center justify-between mb-5">
+        <h2 class="text-2xl sm:text-3xl font-bold">{t('headingStats', $language)}</h2>
+        <button on:click={openGame} aria-label="Fermer / Close"
+                class="rounded-lg bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 text-lg">✕</button>
       </header>
 
-      <!-- Top metrics -->
-      <div class="mb-4 flex justify-center space-x-6 flex-shrink-0">
-        <div class="py-2">
-          <span class="font-medium mr-1">Magical power:</span>
-          <span class="font-semibold">{current.magicalPower}</span>
-        </div>
-        <div class="py-2">
-          <span class="font-medium mr-1">Magical knowledge:</span>
-          <span class="font-semibold">{current.magicalKnowledge}</span>
-        </div>
+      <div class="rounded-xl border border-amber-600/40 p-4 mb-6 bg-amber-700/10">
+        <p class="text-lg font-semibold">{t('unlimitedMode', $language)} · ∞</p>
+        <p class="mt-1 text-sm">{t('unlimitedHelp', $language)}</p>
+        <p class="mt-2 text-xs opacity-80">{t('engineWarning', $language)}</p>
       </div>
 
-      <!-- Available points -->
-      <div class="mb-6 text-center font-medium flex-shrink-0">
-        Available points: {current.availablePoints}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        {#each [
+          {key: 'magicalPower' as const, label: 'magicalPower' as const},
+          {key: 'magicalKnowledge' as const, label: 'magicalKnowledge' as const}
+        ] as extra}
+          <div class="rounded-xl bg-gray-200 dark:bg-gray-800 p-3">
+            <div class="flex items-center justify-between mb-3">
+              <span class="font-semibold">{t(extra.label, $language)}</span>
+              <strong>{number($statsStore[extra.key])}</strong>
+            </div>
+            <div class="flex justify-end gap-2">
+              <button on:click={() => statsStore.addStat(extra.key, 1)}
+                      class="rounded bg-gray-700 text-white px-3 py-2">+1</button>
+              <button on:click={() => statsStore.addStat(extra.key, 10)}
+                      class="rounded bg-gray-700 text-white px-3 py-2">+10</button>
+              <button on:click={() => statsStore.addStat(extra.key, 100)}
+                      class="rounded bg-gray-700 text-white px-3 py-2">+100</button>
+            </div>
+          </div>
+        {/each}
       </div>
 
-      <!-- Base stats list -->
-      <div class="flex-grow flex flex-col p-4 justify-center space-y-6">
-        <ul class="grid grid-cols-2 gap-y-2 gap-x-3">
-          {#each firstBatch as key}
-            <li>
-              <button
-                class="w-full flex justify-between items-center px-3 py-2 text-sm sm:text-base font-medium bg-gray-800 text-neutral-50 dark:bg-gray-50 dark:text-neutral-900 rounded-lg shadow hover:shadow-md transition focus:outline-none"
-                on:click={() => handleClick(key)}
-              >
-                <span class="truncate">{key}</span>
-                <span class="ml-2 flex-shrink-0">{current[key]}</span>
-              </button>
-            </li>
-          {/each}
-        </ul>
-
-        <ul class="grid grid-cols-1 gap-y-2">
-          {#each restBatch as key}
-            <li>
-              <button
-                class="w-full flex justify-between items-center px-3 py-2 text-sm sm:text-base font-medium bg-gray-800 text-neutral-50 dark:bg-gray-50 dark:text-neutral-900 rounded-lg shadow hover:shadow-md transition focus:outline-none"
-                on:click={() => handleClick(key)}
-              >
-                <span class="truncate">{key}</span>
-                <span class="ml-2 flex-shrink-0">{current[key]}</span>
-              </button>
-            </li>
-          {/each}
-        </ul>
+      <p class="mb-4 font-semibold">{t('availablePoints', $language)} : ∞</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {#each baseKeys as key}
+          <div class="rounded-xl border border-gray-300 dark:border-gray-700 px-3 py-3">
+            <div class="flex justify-between items-center gap-3 mb-3">
+              <span class="font-semibold">{t(names[key], $language)}</span>
+              <span class="font-bold tabular-nums">{number($statsStore[key])}</span>
+            </div>
+            <div class="flex gap-2 justify-end">
+              <button on:click={() => statsStore.addStat(key, -1)}
+                      title={t('reduce', $language)}
+                      class="rounded bg-gray-300 dark:bg-gray-700 px-3 py-2">−1</button>
+              {#each [1, 10, 100] as amount}
+                <button on:click={() => statsStore.addStat(key, amount)}
+                        title={t('increase', $language) + ' ' + amount}
+                        class="rounded bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 px-3 py-2">+{amount}</button>
+              {/each}
+            </div>
+          </div>
+        {/each}
       </div>
+      <button on:click={reset}
+              class="mt-7 w-full border border-red-500 rounded-lg p-3 text-red-600 dark:text-red-400">
+        {t('resetStats', $language)}
+      </button>
     </div>
-  </div>
+  </section>
 {/if}
