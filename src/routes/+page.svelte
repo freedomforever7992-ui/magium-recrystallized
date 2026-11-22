@@ -1,6 +1,12 @@
 <script lang="ts">
   import { writable } from "svelte/store";
   import { base } from "$app/paths";
+  import { goto } from "$app/navigation";
+  import { onMount } from "svelte";
+  import { language } from "$lib/i18n";
+  onMount(() => {
+    if ("__TAURI_INTERNALS__" in window) goto(base + "/play", { replaceState: true });
+  });
 
   // Scroll store
   const scrollY = writable(0);
@@ -162,14 +168,14 @@
         class="inline-block px-10 py-4 font-semibold bg-[#D69E2E] text-[#3F1D1D]
         rounded-full hover:bg-[#b9891f] transition-all shadow-inner"
       >
-        Play in Browser
+        {$language === "fr" ? "Jouer" : "Play in Browser"}
       </a>
       <a
         href=""
         class="inline-block px-10 py-4 font-semibold bg-[#D69E2E] text-[#3F1D1D]
         rounded-full hover:bg-[#b9891f] transition-all shadow-inner"
       >
-        Download App
+        {$language === "fr" ? "Télécharger l’application" : "Download App"}
       </a>
     </div>
   </section>
@@ -178,7 +184,7 @@
   <section>
     <div class="max-w-3xl mx-auto px-6 text-center space-y-6 pt-10 pb-14">
       <h2 class="text-center text-3xl font-extrabold text-[#D69E2E]">
-        About Magium: Recrystallized
+        {$language === "fr" ? "À propos de Magium : Recrystallized" : "About Magium: Recrystallized"}
       </h2>
       <blockquote
         class="text-xl italic leading-relaxed max-w-prose mx-auto text-[#FAF5E4]"
@@ -207,7 +213,7 @@
   <section class="py-16 bg-transparent">
     <div class="max-w-6xl mx-auto px-6 grid gap-12">
       <h2 class="text-center text-3xl font-extrabold text-[#D69E2E]">
-        Join the Effort
+        {$language === "fr" ? "Participer au projet" : "Join the Effort"}
       </h2>
 
       <div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-8">
@@ -280,7 +286,7 @@
   <section class="py-10">
     <div class="max-w-5xl mx-auto px-6">
       <h2 class="text-2xl font-bold text-[#D69E2E] text-center mb-6">
-        Contributors
+        {$language === "fr" ? "Contributeurs" : "Contributors"}
       </h2>
       <div
         class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-9 gap-6"
