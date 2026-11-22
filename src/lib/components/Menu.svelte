@@ -20,6 +20,7 @@
   import SettingsPanel from "./SettingsPanel.svelte";
   import AboutPanel from "./AboutPanel.svelte";
   import { useMaxWidth } from "$lib/stores/displaysettings";
+  import { language, t, type TranslationKey } from "$lib/i18n";
 
   // Reference to the menu container for width measurement
   let menuEl: HTMLElement;
@@ -145,6 +146,11 @@
     label: string;
     action: () => void;
   }
+  const labels: Record<string, TranslationKey> = {
+    "Quicksave": "quicksave", "Last Checkpoint": "checkpoint",
+    "Achievements": "achievements", "Saves": "saves",
+    "Settings": "settings", "About": "about"
+  };
   const buttons: MenuButton[] = [
     { label: "Quicksave", action: quicksave },
     { label: "Last Checkpoint", action: loadLastCheckpoint },
@@ -209,7 +215,7 @@
         class:text-left={$useMaxWidth}
         class:text-center={!$useMaxWidth}
       >
-        Menu
+        {t("menu", $language)}
       </h2>
       <ul class="space-y-3">
         {#each buttons as { label, action }}
@@ -221,7 +227,7 @@
               class:text-left={$useMaxWidth}
               class:text-center={!$useMaxWidth}
             >
-              {label}
+              {t(labels[label], $language)}
             </button>
           </li>
         {/each}
